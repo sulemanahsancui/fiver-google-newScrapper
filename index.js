@@ -1,6 +1,6 @@
 const puppeteer = require('puppeteer');
 const excel = require('exceljs');
-
+const fs = require('fs');
 //delay funtion to stop code exceution 
 async function delay(milliseconds) {
     await new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -25,21 +25,25 @@ async function main() {
             const data = await getTextFromKfXsidElement(page);
             await createXLSFile(data);
         };
-        let timeoutId;
+        
         // Expose the scrapeAndCreateXLSFile function to be used in the browser context
         await page.exposeFunction('scrapeAndCreateXLSFile', scrapeAndCreateXLSFile);
+        
         // Add the event listener in the browser context
         await page.evaluate(() => {
             const inputField = document.querySelector('.Ax4B8.ZAGvjd');
             const handleInput = async () => {
-                clearTimeout(timeoutId);
-                timeoutId = setTimeout(async () => {
-                    await window.scrapeAndCreateXLSFile();
-                }, 3000); // Adjust the delay as needed (e.g., 3000ms = 3 seconds)
+                const value = inputField.value.trim();
+                if (value === '') {
+                    return; // If input value is empty, do nothing
+                }
+                await window.scrapeAndCreateXLSFile();
             };
 
             inputField.addEventListener('change', handleInput);
         });
+
+        
         //   await browser.close();
     } catch (error) {
         console.error(error);
@@ -56,7 +60,7 @@ async function getTextFromKfXsidElement(page) {
         const JAEwCElements = await page.$$('.JAEwC');
         if (kfXsidElements.length > 0) {
             const kfXsidTexts = [];
-            for (let i = 2; i < kfXsidElements.length - 1; i++) {
+            for (let i = 0; i < kfXsidElements.length; i++) {
                 const element = kfXsidElements[i];
                 const element1 = JNjBJfElements[i];
                 const element2 = JAEwCElements[i];
@@ -76,24 +80,30 @@ async function getTextFromKfXsidElement(page) {
 //create xls file of scrapped data 
 
 async function createXLSFile(data) {
-
+    const fileName = 'output.xlsx';
     const workbook = new excel.Workbook();
-    const worksheet = workbook.addWorksheet('Data');
-    // Set the header row with the property names
-    worksheet.addRow(Object.keys(data[0]));
-    // Add the data to the worksheet
-    data.forEach((item) => {
-        const rowValues = Object.values(item).map((value) => {
-            // Check if the value is null or empty, and replace it with "N/A"
-            return value === undefined ? 'N/A' : value;
+    if (fs.existsSync(fileName)) {
+        await workbook.xlsx.readFile(fileName);
+        const existingWorksheet = workbook.getWorksheet('Data');
+        data.forEach((item) => {
+            const rowValues = Object.values(item).map((value) => {
+                return value === undefined ? 'N/A' : value;
+            });
+            existingWorksheet.addRow(rowValues);
         });
-        worksheet.addRow(rowValues);
-    });
-    // Generate a unique filename for the XLS file
-    const fileName = `output_${Date.now()}.xlsx`;
-    // Save the workbook to a file
+    } else {
+        const worksheet = workbook.addWorksheet('Data');
+        worksheet.addRow(Object.keys(data[0]));
+        data.forEach((item) => {
+            const rowValues = Object.values(item).map((value) => {
+                return value === undefined ? 'N/A' : value;
+            });
+            worksheet.addRow(rowValues);
+        });
+    }
+    // Save the updated workbook back to the file
     await workbook.xlsx.writeFile(fileName);
-    console.log(`XLS file "${fileName}" created successfully.`);
+    console.log(`Data ${data.length} rows appended to XLSX file "${fileName}" successfully.`);
 }
 
 main()  
