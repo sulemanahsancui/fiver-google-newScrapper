@@ -6,7 +6,6 @@ async function delay(milliseconds) {
     await new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-
 async function main() {
     try {
         const browser = await puppeteer.launch({
@@ -21,8 +20,26 @@ async function main() {
             timeout: 0,
             waitUntil: 'networkidle2',
         });
-        const data = await getTextFromKfXsidElement(page)
-        await createXLSFile(data)
+        // Function to scrape and create XLS file
+        const scrapeAndCreateXLSFile = async () => {
+            const data = await getTextFromKfXsidElement(page);
+            await createXLSFile(data);
+        };
+        let timeoutId;
+        // Expose the scrapeAndCreateXLSFile function to be used in the browser context
+        await page.exposeFunction('scrapeAndCreateXLSFile', scrapeAndCreateXLSFile);
+        // Add the event listener in the browser context
+        await page.evaluate(() => {
+            const inputField = document.querySelector('.Ax4B8.ZAGvjd');
+            const handleInput = async () => {
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(async () => {
+                    await window.scrapeAndCreateXLSFile();
+                }, 3000); // Adjust the delay as needed (e.g., 3000ms = 3 seconds)
+            };
+
+            inputField.addEventListener('change', handleInput);
+        });
         //   await browser.close();
     } catch (error) {
         console.error(error);
